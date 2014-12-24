@@ -7,7 +7,7 @@ using NLog;
 
 namespace bussedly.Models
 {
-    public class BusEireannRepository : IStopRepository
+    public class BusEireannRepository : IStopRepository, IBusRepository
     {
         private class Location
         {
@@ -17,9 +17,9 @@ namespace bussedly.Models
 
         private Logger logger;
 
-        private Dictionary<long, Route> routes;
-        private Dictionary<long, Stop> stops;
-        private Dictionary<long, Bus> buses;
+        private Dictionary<string, Route> routes;
+        private Dictionary<string, Stop> stops;
+        private Dictionary<string, Bus> buses;
         private ExtendedHttpClient client;
         private TimeUtilities timeUtils;
         private long lastBusRequestTimestamp;
@@ -32,9 +32,9 @@ namespace bussedly.Models
         public BusEireannRepository()
         {
             this.logger = LogManager.GetCurrentClassLogger();
-            this.routes = new Dictionary<long, Route>();
-            this.stops = new Dictionary<long, Stop>();
-            this.buses = new Dictionary<long, Bus>();
+            this.routes = new Dictionary<string, Route>();
+            this.stops = new Dictionary<string, Stop>();
+            this.buses = new Dictionary<string, Bus>();
             this.client = new ExtendedHttpClient();
             this.timeUtils = new TimeUtilities();
         }
@@ -69,36 +69,36 @@ namespace bussedly.Models
                 var newPosition = this.CreatePositionFromLocation(
                     rawStop.latitude.ToString(), rawStop.longitude.ToString());
                 var newStop = new Stop(
-                    long.Parse(rawStop.id.ToString()),
+                    rawStop.id.ToString(),
                     rawStop.name.ToString(),
                     newPosition,
                     rawStop.shortName.ToString());
-                this.stops.Add(newStop.Id, newStop);
+                this.stops.Add(newStop.id, newStop);
             }
 
             return this.stops.Values;
         }
 
-        public Stop GetStop(long id)
+        public Stop GetStop(string id)
         {
             Stop stop;
             this.stops.TryGetValue(id, out stop);
             return stop;
         }
 
-        public IEnumerable<Prediction> GetStopPredictions(long id)
+        public IEnumerable<Prediction> GetStopPredictions(string id)
         {
             return this.GetStopPredictions(id, "departure");
         }
 
-        public IEnumerable<Prediction> GetStopPredictions(long id, string direction)
+        public IEnumerable<Prediction> GetStopPredictions(string id, string direction)
         {
             var stop = this.GetStop(id);
             var curTime = this.timeUtils.GetCurrentUnixTimestampMillis();
 
             var values = new List<KeyValuePair<string, string>>();
             values.Add(new KeyValuePair<string, string>(
-                "stop", stop.PublicId));
+                "stop", stop.publicId));
             values.Add(new KeyValuePair<string, string>(
                 "mode", direction));
             values.Add(new KeyValuePair<string, string>(
@@ -112,24 +112,26 @@ namespace bussedly.Models
             foreach (var rawRoute in rawData.Content.routes)
             {
                 var newRoute = new Route(
-                    rawRoute.id, rawRoute.name, rawRoute.directions);
+                    rawRoute.id.ToString(), rawRoute.name.ToString(), rawRoute.directions);
                 this.routes.Add(rawRoute.id, newRoute);
             }
 
             var predictions = new List<Prediction>();
             foreach (var rawPrediction in rawData.Content.actual)
             {
-                var bus = this.GetBus(rawPrediction.vehicleId);
+                var bus = this.GetBus(rawPrediction.vehicleId.ToString());
                 Route route;
-                this.routes.TryGetValue(rawPrediction.routeId, out route);
+                this.routes.TryGetValue(rawPrediction.routeId.ToString(),
+                                        out route);
                 bus.route = route;
-                predictions.Add(new Prediction(bus, rawPrediction.actualTime));
+                predictions.Add(
+                    new Prediction(bus, rawPrediction.actualTime.ToString()));
             }
 
             return predictions;
         }
 
-        public Route GetRoute(long id)
+        public Route GetRoute(string id)
         {
             Route route;
             this.routes.TryGetValue(id, out route);
@@ -137,11 +139,6 @@ namespace bussedly.Models
         }
 
         public IEnumerable<Bus> GetAllBuses()
-        {
-            return this.buses.Values;
-        }
-
-        public IEnumerable<Bus> GetAllBusesByArea(Area area)
         {
             if (this.lastBusRequestTimestamp == 0)
             {
@@ -153,16 +150,28 @@ namespace bussedly.Models
                 "lastUpdate", this.lastBusRequestTimestamp.ToString()));
 
             var content = new FormUrlEncodedContent(values);
-            var rawData = this.client.JsonPostSync(URL_STOPS, content);
+            var rawData = this.client.JsonPostSync(URL_VEHICLES, content);
 
             this.buses.Clear();
             foreach (var rawBus in rawData.Content.vehicles)
             {
+                if (rawBus.isDeleted != null)
+                {
+                    continue;
+                }
                 var newPosition = this.CreatePositionFromLocation(
-                    rawBus.latitude, rawBus.longitude);
+                    rawBus.latitude.ToString(), rawBus.longitude.ToString());
                 var newBus = new Bus(
-                    rawBus.id, rawBus.name, newPosition, rawBus.heading);
-                this.buses.Add(rawBus.id, newBus);
+                    rawBus.id.ToString(),
+                    rawBus.name.ToString(),
+                    newPosition,
+                    int.Parse(rawBus.heading.ToString()));
+                if (this.buses.ContainsKey(newBus.id))
+                {
+                    this.logger.Warn("Duplicated bus with ID={0}", newBus.id);
+                    continue;
+                }
+                this.buses.Add(newBus.id, newBus);
             }
 
             this.lastBusRequestTimestamp =
@@ -170,7 +179,21 @@ namespace bussedly.Models
             return this.buses.Values;
         }
 
-        public Bus GetBus(long id)
+        public IEnumerable<Bus> GetAllBusesByArea(Area area)
+        {
+            var allBuses = this.GetAllBuses();
+            var filteredBuses = new List<Bus>();
+            foreach (var bus in allBuses)
+            {
+                if (area.Contains(bus.position))
+                {
+                    filteredBuses.Add(bus);
+                }
+            }
+            return filteredBuses;
+        }
+
+        public Bus GetBus(string id)
         {
             Bus bus;
             this.buses.TryGetValue(id, out bus);
@@ -195,8 +218,8 @@ namespace bussedly.Models
         {
             // convert actual WGS84 coords to BusEireann's coord "system"
             var location = new BusEireannRepository.Location();
-            location.Latitude = (int) Math.Round(position.Latitude * 3600000.0);
-            location.Longitude = (int) Math.Round(position.Longitude * 3600000.0);
+            location.Latitude = (int) Math.Round(position.latitude * 3600000.0);
+            location.Longitude = (int) Math.Round(position.longitude * 3600000.0);
             return location;
         }
     }

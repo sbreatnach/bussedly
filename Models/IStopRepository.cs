@@ -10,7 +10,7 @@ namespace bussedly.Models
     {
         IEnumerable<Stop> GetAllStops();
         IEnumerable<Stop> GetAllStopsByArea(Area area);
-        Stop GetStop(long id);
-        IEnumerable<Prediction> GetStopPredictions(long id);
+        Stop GetStop(string id);
+        IEnumerable<Prediction> GetStopPredictions(string id);
     }
 }

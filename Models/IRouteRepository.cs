@@ -10,6 +10,6 @@ namespace bussedly.Models
     {
         IEnumerable<Route> GetAllRoutes();
         IEnumerable<Route> GetAllRoutesByArea(Area area);
-        Route GetRoute(long id);
+        Route GetRoute(string id);
     }
 }

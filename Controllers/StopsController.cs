@@ -18,7 +18,7 @@ namespace bussedly.Controllers
             return repository.GetAllStops();
         }
 
-        public IEnumerable<Prediction> GetStopPredictions(long id)
+        public IEnumerable<Prediction> GetStopPredictions(string id)
         {
             IEnumerable<Prediction> predictions = null;
             try

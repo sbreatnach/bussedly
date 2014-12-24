@@ -7,23 +7,23 @@ namespace bussedly.Models
 {
     public class Stop
     {
-        public long Id { get; set; }
-        public string Name { get; set; }
-        public Position Position { get; set; }
-        public string PublicId { get; set; }
+        public string id { get; set; }
+        public string name { get; set; }
+        public Position position { get; set; }
+        public string publicId { get; set; }
 
-        public Stop(long id, string name, double latitude, double longitude,
+        public Stop(string id, string name, double latitude, double longitude,
                     string publicId)
             : this(id, name, new Position(latitude, longitude), publicId)
         {
         }
 
-        public Stop(long id, string name, Position position, string publicId)
+        public Stop(string id, string name, Position position, string publicId)
         {
-            this.Id = id;
-            this.Name = name;
-            this.Position = position;
-            this.PublicId = publicId;
+            this.id = id;
+            this.name = name;
+            this.position = position;
+            this.publicId = publicId;
         }
     }
 }

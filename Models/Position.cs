@@ -7,13 +7,13 @@ namespace bussedly.Models
 {
     public class Position
     {
-        public double Latitude { get; set; }
-        public double Longitude { get; set; }
+        public double latitude { get; set; }
+        public double longitude { get; set; }
 
         public Position(double latitude, double longitude)
         {
-            this.Latitude = latitude;
-            this.Longitude = longitude;
+            this.latitude = latitude;
+            this.longitude = longitude;
         }
 
         public override bool Equals(System.Object obj)
@@ -29,8 +29,8 @@ namespace bussedly.Models
                 return false;
             }
 
-            return (this.Latitude == position.Latitude) &&
-                (this.Longitude == position.Longitude);
+            return (this.latitude == position.latitude) &&
+                (this.longitude == position.longitude);
         }
 
         public bool Equals(Position position)
@@ -41,13 +41,13 @@ namespace bussedly.Models
                 return false;
             }
 
-            return (this.Latitude == position.Latitude) &&
-                (this.Longitude == position.Longitude);
+            return (this.latitude == position.latitude) &&
+                (this.longitude == position.longitude);
         }
 
         public override int GetHashCode()
         {
-            return Convert.ToInt32((this.Latitude * this.Longitude) * 1000000);
+            return Convert.ToInt32((this.latitude * this.longitude) * 1000000);
         }
     }
 }

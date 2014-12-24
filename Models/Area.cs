@@ -16,6 +16,14 @@ namespace bussedly.Models
             this.SouthEastPosition = new Position(bottom, right);
         }
 
+        public bool Contains(Position position)
+        {
+            return position.latitude <= this.NorthWestPosition.latitude &&
+                position.latitude >= this.SouthEastPosition.latitude &&
+                position.longitude >= this.NorthWestPosition.longitude &&
+                position.longitude <= this.SouthEastPosition.longitude;
+        }
+
         public override bool Equals(System.Object obj)
         {
             if (obj == null)

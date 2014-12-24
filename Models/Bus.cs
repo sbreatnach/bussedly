@@ -7,44 +7,44 @@ namespace bussedly.Models
 {
     public class Prediction
     {
-        public Bus Bus { get; set; }
-        public TimeSpan DueTime { get; set; }
+        public Bus bus { get; set; }
+        public TimeSpan dueTime { get; set; }
 
         public Prediction(Bus bus, string dueTime)
         {
-            this.Bus = bus;
-            this.DueTime = TimeSpan.Parse(dueTime);
+            this.bus = bus;
+            this.dueTime = TimeSpan.Parse(dueTime);
         }
     }
 
     public class Route
     {
-        public long Id { get; set; }
-        public string Name { get; set; }
-        public string[] Directions { get; set; }
+        public string id { get; set; }
+        public string name { get; set; }
+        public string[] directions { get; set; }
 
-        public Route(long id, string name, string[] directions)
+        public Route(string id, string name, string[] directions)
         {
-            this.Id = id;
-            this.Name = name;
-            this.Directions = directions;
+            this.id = id;
+            this.name = name;
+            this.directions = directions;
         }
     }
 
     public class Bus
     {
-        public long Id { get; set; }
-        public string Name { get; set; }
-        public Position Position { get; set; }
-        public int Direction { get; set; }
-        public Route Route { get; set; }
+        public string id { get; set; }
+        public string name { get; set; }
+        public Position position { get; set; }
+        public int direction { get; set; }
+        public Route route { get; set; }
 
-        public Bus(long id, string name, Position position, int direction)
+        public Bus(string id, string name, Position position, int direction)
         {
-            this.Id = id;
-            this.Name = name;
-            this.Position = position;
-            this.Direction = direction;
+            this.id = id;
+            this.name = name;
+            this.position = position;
+            this.direction = direction;
         }
     }
 }

@@ -10,6 +10,6 @@ namespace bussedly.Models
     {
         IEnumerable<Bus> GetAllBuses();
         IEnumerable<Bus> GetAllBusesByArea(Area area);
-        Bus GetBus(long id);
+        Bus GetBus(string id);
     }
 }
