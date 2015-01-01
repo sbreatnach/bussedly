@@ -84,10 +84,13 @@ namespace bussedly.Models
                 newStops.Add(newStop.id, newStop);
             }
 
-            this.cache.Set(
-                curCacheKey, newStops.Values,
-                new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
-            );
+            if (newStops.Count() > 0)
+            {
+                this.cache.Set(
+                    curCacheKey, newStops.Values,
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
+                );
+            }
             return newStops.Values;
         }
 
@@ -137,30 +140,55 @@ namespace bussedly.Models
             foreach (var rawRoute in rawData.Content.routes)
             {
                 var newRoute = new Route(
-                    rawRoute.id.ToString(), rawRoute.name.ToString(), rawRoute.directions);
+                    rawRoute.id.ToString(), rawRoute.name.ToString(),
+                    rawRoute.directions.ToObject<List<string>>()
+                );
                 this.cache.Set(
                     CacheKey.CreateKey(newRoute), newRoute,
                     new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
                 );
-                newRoutes.Add(rawRoute.id, newRoute);
+                newRoutes.Add(newRoute.id, newRoute);
             }
 
             var predictions = new List<Prediction>();
             foreach (var rawPrediction in rawData.Content.actual)
             {
-                var bus = this.GetBus(rawPrediction.vehicleId.ToString());
+                var isActive = rawPrediction.status.ToString().Equals("PREDICTED");
+                string dueTime = null;
+                Bus bus = null;
+
+                if (isActive)
+                {
+                    // bus is already on the move, so should be in cache
+                    bus = this.GetBus(rawPrediction.vehicleId.ToString());
+                    dueTime = rawPrediction.actualTime.ToString();
+                }
+                if (bus == null)
+                {
+                    // bus not found in cache, or not on the move as yet
+                    // so generate dummy bus for prediction
+                    var terminus = rawPrediction.direction.ToString();
+                    var pattern = rawPrediction.patternText.ToString();
+                    bus = new Bus(
+                        "", pattern + " " + terminus, new Position(0, 0), 0
+                    );
+                    dueTime = rawPrediction.plannedTime.ToString();
+                }
+
                 Route route;
                 newRoutes.TryGetValue(rawPrediction.routeId.ToString(),
                                       out route);
                 bus.route = route;
-                predictions.Add(
-                    new Prediction(bus, rawPrediction.actualTime.ToString()));
+                predictions.Add(new Prediction(bus, dueTime, isActive));
             }
 
-            this.cache.Set(
-                curCacheKey, predictions,
-                new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
-            );
+            if (predictions.Count() > 0)
+            {
+                this.cache.Set(
+                    curCacheKey, predictions,
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                );
+            }
             return predictions;
         }
 
@@ -218,12 +246,15 @@ namespace bussedly.Models
                 newBuses.Add(newBus.id, newBus);
             }
 
+            if (newBuses.Count() > 0)
+            {
+                this.cache.Set(
+                    curCacheKey, newBuses.Values,
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                );
+            }
             this.lastBusRequestTimestamp =
                 this.timeUtils.GetCurrentUnixTimestampMillis();
-            this.cache.Set(
-                curCacheKey, newBuses.Values,
-                new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
-            );
             return newBuses.Values;
         }
 
@@ -248,10 +279,13 @@ namespace bussedly.Models
                 }
             }
 
-            this.cache.Set(
-                curCacheKey, filteredBuses,
-                new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
-            );
+            if (filteredBuses.Count() > 0)
+            {
+                this.cache.Set(
+                    curCacheKey, filteredBuses,
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                );
+            }
             return filteredBuses;
         }
 
