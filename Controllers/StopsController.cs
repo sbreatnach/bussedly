@@ -10,12 +10,11 @@ namespace bussedly.Controllers
 {
     public class StopsController : ApiController
     {
-        // TODO: use DI to inject this repository when needed
-        static readonly IStopRepository repository = new BusEireannRepository();
+        private readonly IStopRepository _repository;
 
-        public IEnumerable<Stop> GetAllStops()
+        public StopsController(IStopRepository repository)
         {
-            return repository.GetAllStops();
+            this._repository = repository;
         }
 
         public IEnumerable<Prediction> GetStopPredictions(string id)
@@ -23,7 +22,7 @@ namespace bussedly.Controllers
             IEnumerable<Prediction> predictions = null;
             try
             {
-                predictions = repository.GetStopPredictions(id);
+                predictions = _repository.GetStopPredictions(id);
             }
             catch(BussedException be)
             {
@@ -42,7 +41,7 @@ namespace bussedly.Controllers
             var area = new Area(left, right, top, bottom);
             try
             {
-                return repository.GetAllStopsByArea(area);
+                return _repository.GetAllStopsByArea(area);
             }
             catch(BussedException be)
             {

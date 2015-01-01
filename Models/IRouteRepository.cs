@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace bussedly.Models
 {
-    interface IRouteRepository
+    public interface IRouteRepository
     {
         IEnumerable<Route> GetAllRoutes();
         IEnumerable<Route> GetAllRoutesByArea(Area area);

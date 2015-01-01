@@ -6,9 +6,8 @@ using System.Threading.Tasks;
 
 namespace bussedly.Models
 {
-    interface IStopRepository
+    public interface IStopRepository
     {
-        IEnumerable<Stop> GetAllStops();
         IEnumerable<Stop> GetAllStopsByArea(Area area);
         Stop GetStop(string id);
         IEnumerable<Prediction> GetStopPredictions(string id);

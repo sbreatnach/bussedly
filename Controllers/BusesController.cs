@@ -10,8 +10,12 @@ namespace bussedly.Controllers
 {
     public class BusesController : ApiController
     {
-        // TODO: use DI to inject this repository when needed
-        static readonly IBusRepository repository = new BusEireannRepository();
+        private readonly IBusRepository repository;
+
+        public BusesController(IBusRepository repository)
+        {
+            this.repository = repository;
+        }
 
         public IEnumerable<Bus> GetAllBuses()
         {

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace bussedly.Models
 {
-    interface IBusRepository
+    public interface IBusRepository
     {
         IEnumerable<Bus> GetAllBuses();
         IEnumerable<Bus> GetAllBusesByArea(Area area);
