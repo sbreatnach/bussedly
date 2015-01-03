@@ -41,12 +41,11 @@ namespace bussedly.Models
         public int direction { get; set; }
         public Route route { get; set; }
 
-        public Bus(string id, string name, Position position, int direction)
+        public Bus(string id, string name, Position position)
         {
             this.id = id;
             this.name = name;
             this.position = position;
-            this.direction = direction;
         }
     }
 }

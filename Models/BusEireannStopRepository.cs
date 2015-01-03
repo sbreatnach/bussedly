@@ -24,8 +24,9 @@ namespace bussedly.Models
         private TimeUtilities timeUtils;
         private long lastBusRequestTimestamp;
 
-        static readonly TimeSpan CACHE_SHORT_TIME = new TimeSpan(0, 0, 60);
-        static readonly TimeSpan CACHE_LONG_TIME = new TimeSpan(24, 0, 0);
+        static readonly TimeSpan CACHE_TIME_30SECS = new TimeSpan(0, 0, 30);
+        static readonly TimeSpan CACHE_TIME_60SECS = new TimeSpan(0, 0, 60);
+        static readonly TimeSpan CACHE_TIME_DAY = new TimeSpan(24, 0, 0);
         const string URL_BASE = "http://whensmybus.buseireann.ie/internetservice";
         const string URL_STOPS = URL_BASE + "/geoserviceDispatcher/services/stopinfo/stops";
         const string URL_VEHICLES = URL_BASE + "/geoserviceDispatcher/services/vehicleinfo/vehicles";
@@ -79,7 +80,7 @@ namespace bussedly.Models
                     rawStop.shortName.ToString());
                 this.cache.Set(
                     CacheKey.CreateKey(newStop), newStop,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
                 );
                 newStops.Add(newStop.id, newStop);
             }
@@ -88,7 +89,7 @@ namespace bussedly.Models
             {
                 this.cache.Set(
                     curCacheKey, newStops.Values,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
                 );
             }
             return newStops.Values;
@@ -145,7 +146,7 @@ namespace bussedly.Models
                 );
                 this.cache.Set(
                     CacheKey.CreateKey(newRoute), newRoute,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_LONG_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
                 );
                 newRoutes.Add(newRoute.id, newRoute);
             }
@@ -170,7 +171,7 @@ namespace bussedly.Models
                     var terminus = rawPrediction.direction.ToString();
                     var pattern = rawPrediction.patternText.ToString();
                     bus = new Bus(
-                        "", pattern + " " + terminus, new Position(0, 0), 0
+                        "", pattern + " " + terminus, new Position(0, 0)
                     );
                     dueTime = rawPrediction.plannedTime.ToString();
                 }
@@ -186,7 +187,7 @@ namespace bussedly.Models
             {
                 this.cache.Set(
                     curCacheKey, predictions,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_30SECS)
                 );
             }
             return predictions;
@@ -230,10 +231,11 @@ namespace bussedly.Models
                 var newPosition = this.CreatePositionFromLocation(
                     rawBus.latitude.ToString(), rawBus.longitude.ToString());
                 var newBus = new Bus(
-                    rawBus.id.ToString(),
-                    rawBus.name.ToString(),
-                    newPosition,
-                    int.Parse(rawBus.heading.ToString()));
+                    rawBus.id.ToString(), rawBus.name.ToString(), newPosition);
+                if (rawBus.heading != null)
+                {
+                    newBus.direction = int.Parse(rawBus.heading.ToString());
+                }
                 if (newBuses.ContainsKey(newBus.id))
                 {
                     this.logger.Warn("Duplicated bus with ID={0}", newBus.id);
@@ -241,7 +243,7 @@ namespace bussedly.Models
                 }
                 this.cache.Set(
                     CacheKey.CreateKey(newBus), newBus,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
                 );
                 newBuses.Add(newBus.id, newBus);
             }
@@ -250,7 +252,7 @@ namespace bussedly.Models
             {
                 this.cache.Set(
                     curCacheKey, newBuses.Values,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
                 );
             }
             this.lastBusRequestTimestamp =
@@ -283,7 +285,7 @@ namespace bussedly.Models
             {
                 this.cache.Set(
                     curCacheKey, filteredBuses,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_SHORT_TIME)
+                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
                 );
             }
             return filteredBuses;
