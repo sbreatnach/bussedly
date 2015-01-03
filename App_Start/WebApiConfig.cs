@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Linq;﻿
 using System.Web.Http;
+using System.Web.Http.ExceptionHandling;
 using System.Web.Http.Cors;
 
 namespace bussedly
@@ -14,6 +15,9 @@ namespace bussedly
             // allow CORS requests for all services on this server
             var cors = new EnableCorsAttribute("*", "*", "*");
             config.EnableCors(cors);
+
+            config.Services.Add(typeof(IExceptionLogger),
+                                new CommonExceptionLogger());
 
             // Web API routes
             config.MapHttpAttributeRoutes();
