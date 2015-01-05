@@ -228,6 +228,12 @@ namespace bussedly.Models
                 {
                     continue;
                 }
+                else if (rawBus.latitude == null || rawBus.longitude == null ||
+                         rawBus.id == null || rawBus.name == null)
+                {
+                    this.logger.Warn("Invalid bus data: {0}", rawBus.ToString());
+                    continue;
+                }
                 var newPosition = this.CreatePositionFromLocation(
                     rawBus.latitude.ToString(), rawBus.longitude.ToString());
                 var newBus = new Bus(
