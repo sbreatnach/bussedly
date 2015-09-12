@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Web;
 using System.Net;
-using System.Net.Http;
-using System.Runtime.Caching;
 using NLog;
 
 namespace bussedly.Models
@@ -19,25 +16,27 @@ namespace bussedly.Models
 
         private Logger logger;
 
-        private ObjectCache cache;
+        private LocalCache cache;
+        private RawDataConverter jsObjectConverter;
         private ExtendedHttpClient client;
         private TimeUtilities timeUtils;
-        private long lastBusRequestTimestamp;
 
         static readonly TimeSpan CACHE_TIME_30SECS = new TimeSpan(0, 0, 30);
         static readonly TimeSpan CACHE_TIME_60SECS = new TimeSpan(0, 0, 60);
         static readonly TimeSpan CACHE_TIME_DAY = new TimeSpan(24, 0, 0);
-        const string URL_BASE = "http://whensmybus.buseireann.ie/internetservice";
-        const string URL_STOPS = URL_BASE + "/geoserviceDispatcher/services/stopinfo/stops";
-        const string URL_VEHICLES = URL_BASE + "/geoserviceDispatcher/services/vehicleinfo/vehicles";
-        const string URL_STOP = URL_BASE + "/services/passageInfo/stopPassages/stop";
+        const string URL_BASE = "http://www.buseireann.ie/inc/proto";
+        const string URL_STOPS = URL_BASE + "/stopPointTdi.php";
+        const string URL_VEHICLES = URL_BASE + "/vehicleTdi.php";
+        const string URL_STOP = URL_BASE + "/stopPassageTdi.php";
+        const string URL_ROUTES = URL_BASE + "/routes.php";
 
         public BusEireannRepository()
         {
             this.logger = LogManager.GetCurrentClassLogger();
-            this.cache = MemoryCache.Default;
+            this.cache = new LocalCache();
             this.client = new ExtendedHttpClient();
             this.timeUtils = new TimeUtilities();
+            this.jsObjectConverter = new RawJsObjectDataConverter();
         }
 
         public IEnumerable<Stop> GetAllStopsByArea(Area area)
@@ -46,10 +45,8 @@ namespace bussedly.Models
             var cacheData = this.cache.Get(curCacheKey);
             if (cacheData != null)
             {
-                this.logger.Debug("GetAllStopsByArea::cache hit");
                 return (IEnumerable<Stop>) cacheData;
             }
-            this.logger.Debug("GetAllStopsByArea::cache miss");
 
             var values = new List<KeyValuePair<string, string>>();
             var northWestPosition = this.CreateLocationFromPosition(
@@ -57,30 +54,33 @@ namespace bussedly.Models
             var southEastPosition = this.CreateLocationFromPosition(
                 area.SouthEastPosition);
             values.Add(new KeyValuePair<string, string>(
-                "left", northWestPosition.Longitude.ToString()));
+                "longitude_west", northWestPosition.Longitude.ToString()));
             values.Add(new KeyValuePair<string, string>(
-                "top", northWestPosition.Latitude.ToString()));
+                "latitude_north", northWestPosition.Latitude.ToString()));
             values.Add(new KeyValuePair<string, string>(
-                "bottom", southEastPosition.Latitude.ToString()));
+                "latitude_south", southEastPosition.Latitude.ToString()));
             values.Add(new KeyValuePair<string, string>(
-                "right", southEastPosition.Longitude.ToString()));
-
-            var content = new FormUrlEncodedContent(values);
-            var rawData = this.client.JsonPostSync(URL_STOPS, content);
+                "longitude_east", southEastPosition.Longitude.ToString()));
+            
+            var rawData = this.client.JsonGetAsync(URL_STOPS, values);
 
             var newStops = new Dictionary<string, Stop>();
-            foreach (var rawStop in rawData.Content.stops)
+            foreach (var rawStop in rawData.Content["stopPointTdi"].Values)
             {
+                // skip the trash "foo" keys
+                if (!(rawStop is Dictionary<string, dynamic>))
+                {
+                    continue;
+                }
                 var newPosition = this.CreatePositionFromLocation(
-                    rawStop.latitude.ToString(), rawStop.longitude.ToString());
+                    rawStop["latitude"].ToString(), rawStop["longitude"].ToString());
                 var newStop = new Stop(
-                    rawStop.id.ToString(),
-                    rawStop.name.ToString(),
+                    rawStop["duid"].ToString(),
+                    rawStop["long_name"].ToString(),
                     newPosition,
-                    rawStop.shortName.ToString());
+                    rawStop["code"].ToString());
                 this.cache.Set(
-                    CacheKey.CreateKey(newStop), newStop,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
+                    CacheKey.CreateKey(newStop), newStop, CACHE_TIME_DAY
                 );
                 newStops.Add(newStop.id, newStop);
             }
@@ -88,8 +88,7 @@ namespace bussedly.Models
             if (newStops.Count() > 0)
             {
                 this.cache.Set(
-                    curCacheKey, newStops.Values,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
+                    curCacheKey, newStops.Values, CACHE_TIME_DAY
                 );
             }
             return newStops.Values;
@@ -100,21 +99,56 @@ namespace bussedly.Models
             return (Stop)this.cache.Get(CacheKey.CreateStopKey(id));
         }
 
-        public IEnumerable<Prediction> GetStopPredictions(string id)
+        public Dictionary<string, Route> GetRoutes()
         {
-            return this.GetStopPredictions(id, "departure");
-        }
-
-        public IEnumerable<Prediction> GetStopPredictions(string id, string direction)
-        {
-            string curCacheKey = CacheKey.CreateKey("predictions", id, direction);
+            string curCacheKey = CacheKey.CreateKey("routes");
             var cacheData = this.cache.Get(curCacheKey);
             if (cacheData != null)
             {
-                this.logger.Debug("GetStopPredictions::cache hit");
+                return (Dictionary<string, Route>)cacheData;
+            }
+
+            var rawData = this.client.GetAsync(URL_ROUTES, this.jsObjectConverter);
+
+            var newRoutes = new Dictionary<string, Route>();
+            foreach (var rawRoute in rawData.Content["routeTdi"].Values)
+            {
+                // skip the trash "foo" keys
+                if (!(rawRoute is Dictionary<string, dynamic>))
+                {
+                    continue;
+                }
+                var newRoute = new Route(
+                    rawRoute["duid"].ToString(),
+                    rawRoute["short_name"].ToString()
+                );
+                this.cache.Set(
+                    CacheKey.CreateKey(newRoute), newRoute, CACHE_TIME_DAY
+                );
+                newRoutes.Add(newRoute.id, newRoute);
+            }
+
+            if (newRoutes.Count > 0)
+            {
+                this.cache.Set(curCacheKey, newRoutes, CACHE_TIME_DAY);
+            }
+
+            return newRoutes;
+        }
+
+        public Route GetRoute(string id)
+        {
+            return (Route)this.cache.Get(CacheKey.CreateRouteKey(id));
+        }
+
+        public IEnumerable<Prediction> GetStopPredictions(string id)
+        {
+            string curCacheKey = CacheKey.CreateKey("predictions", id);
+            var cacheData = this.cache.Get(curCacheKey);
+            if (cacheData != null)
+            {
                 return (IEnumerable<Prediction>)cacheData;
             }
-            this.logger.Debug("GetStopPredictions::cache miss");
 
             var stop = this.GetStop(id);
             if (stop == null)
@@ -126,144 +160,66 @@ namespace bussedly.Models
 
             var values = new List<KeyValuePair<string, string>>();
             values.Add(new KeyValuePair<string, string>(
-                "stop", stop.publicId));
+                "stop_point", stop.id));
             values.Add(new KeyValuePair<string, string>(
-                "mode", direction));
-            values.Add(new KeyValuePair<string, string>(
-                "startTime", curTime.ToString()));
-            values.Add(new KeyValuePair<string, string>(
-                "cacheBuster", (curTime + 600000).ToString()));
+                "_", (curTime + 600000).ToString()));
 
-            var content = new FormUrlEncodedContent(values);
-            var rawData = this.client.JsonPostSync(URL_STOP, content);
-
-            var newRoutes = new Dictionary<string, Route>();
-            foreach (var rawRoute in rawData.Content.routes)
-            {
-                var newRoute = new Route(
-                    rawRoute.id.ToString(), rawRoute.name.ToString(),
-                    rawRoute.directions.ToObject<List<string>>()
-                );
-                this.cache.Set(
-                    CacheKey.CreateKey(newRoute), newRoute,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_DAY)
-                );
-                newRoutes.Add(newRoute.id, newRoute);
-            }
-
+            var routes = this.GetRoutes();
+            var rawData = this.client.JsonGetAsync(URL_STOP, values);
+ 
             var predictions = new List<Prediction>();
-            foreach (var rawPrediction in rawData.Content.actual)
+            foreach (var rawPrediction in rawData.Content["stopPassageTdi"].Values)
             {
-                var isActive = rawPrediction.status.ToString().Equals("PREDICTED");
-                string dueTime = null;
+                // skip the trash "foo" keys
+                if (!(rawPrediction is Dictionary<string, dynamic>))
+                {
+                    continue;
+                }
+                var vehicleId = rawPrediction["vehicle_duid"]["duid"].ToString();
+                var arrivalData = rawPrediction["arrival_data"];
+                string actualPassageTime;
+                arrivalData.TryGetValue("actual_passage_time", out actualPassageTime);
+                var isActive = actualPassageTime != null;
+
+                Int32 dueTime = 0;
                 Bus bus = null;
 
                 if (isActive)
                 {
                     // bus is already on the move, so should be in cache
-                    bus = this.GetBus(rawPrediction.vehicleId.ToString());
-                    dueTime = rawPrediction.actualTime.ToString();
+                    bus = this.GetBus(vehicleId);
+                    dueTime = arrivalData["actual_passage_time_utc"].ToInt32();
                 }
                 if (bus == null)
                 {
                     // bus not found in cache, or not on the move as yet
                     // so generate dummy bus for prediction
-                    var terminus = rawPrediction.direction.ToString();
-                    var pattern = rawPrediction.patternText.ToString();
                     bus = new Bus(
-                        "", pattern + " " + terminus, new Position(0, 0)
+                        "",
+                        arrivalData["multilingual_direction_text"]["defaultValue"],
+                        new Position(0, 0)
                     );
-                    dueTime = rawPrediction.plannedTime.ToString();
+                    dueTime = rawPrediction["plannedTime"].ToInt32();
                 }
 
                 Route route;
-                newRoutes.TryGetValue(rawPrediction.routeId.ToString(),
-                                      out route);
+                routes.TryGetValue(rawPrediction["route_duid"]["duid"].ToString(),
+                                   out route);
                 bus.route = route;
-                predictions.Add(new Prediction(bus, dueTime, isActive));
+                predictions.Add(
+                    new Prediction(
+                        bus,
+                        this.timeUtils.GetLocalTimeForTimestamp(dueTime),
+                        isActive));
             }
 
             if (predictions.Count() > 0)
             {
                 this.cache.Set(
-                    curCacheKey, predictions,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_30SECS)
+                    curCacheKey, predictions, CACHE_TIME_30SECS
                 );
             }
             return predictions;
-        }
-
-        public Route GetRoute(string id)
-        {
-            return (Route)this.cache.Get(CacheKey.CreateRouteKey(id));
-        }
-
-        public IEnumerable<Bus> GetAllBuses()
-        {
-            string curCacheKey = "buses";
-            var cacheData = this.cache.Get(curCacheKey);
-            if (cacheData != null)
-            {
-                this.logger.Debug("GetAllBuses::cache hit");
-                return (IEnumerable<Bus>)cacheData;
-            }
-            this.logger.Debug("GetAllBuses::cache miss");
-
-            if (this.lastBusRequestTimestamp == 0)
-            {
-                this.lastBusRequestTimestamp =
-                    this.timeUtils.GetCurrentUnixTimestampMillis();
-            }
-            var values = new List<KeyValuePair<string, string>>();
-            values.Add(new KeyValuePair<string, string>(
-                "lastUpdate", this.lastBusRequestTimestamp.ToString()));
-
-            var content = new FormUrlEncodedContent(values);
-            var rawData = this.client.JsonPostSync(URL_VEHICLES, content);
-
-            var newBuses = new Dictionary<string, Bus>();
-            foreach (var rawBus in rawData.Content.vehicles)
-            {
-                if (rawBus.isDeleted != null)
-                {
-                    continue;
-                }
-                else if (rawBus.latitude == null || rawBus.longitude == null ||
-                         rawBus.id == null || rawBus.name == null)
-                {
-                    this.logger.Warn("Invalid bus data: {0}", rawBus.ToString());
-                    continue;
-                }
-                var newPosition = this.CreatePositionFromLocation(
-                    rawBus.latitude.ToString(), rawBus.longitude.ToString());
-                var newBus = new Bus(
-                    rawBus.id.ToString(), rawBus.name.ToString(), newPosition);
-                if (rawBus.heading != null)
-                {
-                    newBus.direction = int.Parse(rawBus.heading.ToString());
-                }
-                if (newBuses.ContainsKey(newBus.id))
-                {
-                    this.logger.Warn("Duplicated bus with ID={0}", newBus.id);
-                    continue;
-                }
-                this.cache.Set(
-                    CacheKey.CreateKey(newBus), newBus,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
-                );
-                newBuses.Add(newBus.id, newBus);
-            }
-
-            if (newBuses.Count() > 0)
-            {
-                this.cache.Set(
-                    curCacheKey, newBuses.Values,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
-                );
-            }
-            this.lastBusRequestTimestamp =
-                this.timeUtils.GetCurrentUnixTimestampMillis();
-            return newBuses.Values;
         }
 
         public IEnumerable<Bus> GetAllBusesByArea(Area area)
@@ -272,29 +228,52 @@ namespace bussedly.Models
             var cacheData = this.cache.Get(curCacheKey);
             if (cacheData != null)
             {
-                this.logger.Debug("GetAllBusesByArea::cache hit");
                 return (IEnumerable<Bus>)cacheData;
             }
-            this.logger.Debug("GetAllBusesByArea::cache miss");
 
-            var allBuses = this.GetAllBuses();
-            var filteredBuses = new List<Bus>();
-            foreach (var bus in allBuses)
+            var values = new List<KeyValuePair<string, string>>();
+            var northWestPosition = this.CreateLocationFromPosition(
+                area.NorthWestPosition);
+            var southEastPosition = this.CreateLocationFromPosition(
+                area.SouthEastPosition);
+            values.Add(new KeyValuePair<string, string>(
+                "longitude_west", northWestPosition.Longitude.ToString()));
+            values.Add(new KeyValuePair<string, string>(
+                "latitude_north", northWestPosition.Latitude.ToString()));
+            values.Add(new KeyValuePair<string, string>(
+                "latitude_south", southEastPosition.Latitude.ToString()));
+            values.Add(new KeyValuePair<string, string>(
+                "longitude_east", southEastPosition.Longitude.ToString()));
+
+            var rawData = this.client.JsonGetAsync(URL_VEHICLES, values);
+
+            var newBuses = new Dictionary<string, Bus>();
+            foreach (var rawBus in rawData.Content["vehicleTdi"].Values)
             {
-                if (area.Contains(bus.position))
+                // skip the trash "foo" keys
+                if (!(rawBus is Dictionary<string, dynamic>))
                 {
-                    filteredBuses.Add(bus);
+                    continue;
                 }
+                var newPosition = this.CreatePositionFromLocation(
+                    rawBus["latitude"].ToString(), rawBus["longitude"].ToString());
+                var newBus = new Bus(
+                    rawBus["duid"].ToString(),
+                    "unknown",
+                    newPosition);
+                this.cache.Set(
+                    CacheKey.CreateKey(newBus), newBus, CACHE_TIME_30SECS
+                );
+                newBuses.Add(newBus.id, newBus);
             }
 
-            if (filteredBuses.Count() > 0)
+            if (newBuses.Count() > 0)
             {
                 this.cache.Set(
-                    curCacheKey, filteredBuses,
-                    new DateTimeOffset(DateTime.UtcNow + CACHE_TIME_60SECS)
+                    curCacheKey, newBuses.Values, CACHE_TIME_DAY
                 );
             }
-            return filteredBuses;
+            return newBuses.Values;
         }
 
         public Bus GetBus(string id)

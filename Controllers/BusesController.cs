@@ -17,12 +17,6 @@ namespace bussedly.Controllers
             this.repository = repository;
         }
 
-        [AcceptVerbs("GET", "HEAD")]
-        public IEnumerable<Bus> GetAllBuses()
-        {
-            return repository.GetAllBuses();
-        }
-
         [AcceptVerbs("GET")]
         public IEnumerable<Bus> GetBusesByArea(double left, double right,
                                                double top, double bottom)

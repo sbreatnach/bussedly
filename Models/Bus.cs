@@ -25,6 +25,10 @@ namespace bussedly.Models
         public string name { get; set; }
         public List<String> directions { get; set; }
 
+        public Route(string id, string name) : this(id, name, null)
+        {
+        }
+
         public Route(string id, string name, List<String> directions)
         {
             this.id = id;
