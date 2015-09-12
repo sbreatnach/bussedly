@@ -200,24 +200,25 @@ namespace bussedly.Models
             foreach (var rawPrediction in rawData.Content["stopPassageTdi"].Values)
             {
                 // skip the trash "foo" keys
-                if (!(rawPrediction is Dictionary<string, dynamic>))
+                if (!(rawPrediction is Dictionary<string, dynamic>) ||
+                    !rawPrediction.ContainsKey("arrival_data"))
                 {
                     continue;
                 }
                 var vehicleId = rawPrediction["vehicle_duid"]["duid"].ToString();
                 var arrivalData = rawPrediction["arrival_data"];
-                string actualPassageTime;
-                arrivalData.TryGetValue("actual_passage_time", out actualPassageTime);
-                var isActive = actualPassageTime != null;
+                var isActive = arrivalData.ContainsKey("actual_passage_time");
 
-                Int32 dueTime = 0;
+                long dueTime = 0;
                 Bus bus = null;
 
                 if (isActive)
                 {
                     // bus is already on the move, so should be in cache
+                    // FIXME: assumption not true any more since not all buses
+                    // are in cache anymore
                     bus = this.GetBus(vehicleId);
-                    dueTime = arrivalData["actual_passage_time_utc"].ToInt32();
+                    dueTime = arrivalData["actual_passage_time_utc"];
                 }
                 if (bus == null)
                 {
@@ -228,7 +229,7 @@ namespace bussedly.Models
                         arrivalData["multilingual_direction_text"]["defaultValue"],
                         new Position(0, 0)
                     );
-                    dueTime = rawPrediction["plannedTime"].ToInt32();
+                    dueTime = arrivalData["scheduled_passage_time_utc"];
                 }
 
                 Route route;
@@ -238,7 +239,7 @@ namespace bussedly.Models
                 predictions.Add(
                     new Prediction(
                         bus,
-                        this.timeUtils.GetLocalTimeForTimestamp(dueTime),
+                        this.timeUtils.GetLocalTimeForTimestamp((Int32) dueTime),
                         isActive));
             }
 

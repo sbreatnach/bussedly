@@ -115,7 +115,7 @@ namespace bussedly.Models
 
             var response = new HttpData();
             response.StatusCode = responseMessage.StatusCode;
-            response.Content = responseConverter.Convert(contentTask.Result);
+            response.Content = responseConverter.DictConvert(contentTask.Result);
             return response;
         }
     }
