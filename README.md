@@ -5,8 +5,9 @@ APIs used by actual real-time bus websites.
 
 215 - route duid: 6350571126703260090
 
-	curl -k -v -X GET -H "Content-Type: application/json" "http://localhost:50027/v1/buses/?left=-8.4008214622735977&right=-8.3930967003107071&top=51.88590865860202&bottom=51.877431503513762"
-	curl -k -v -X GET -H "Content-Type: application/json" "http://localhost:50027/v1/stops/?left=-8.4008214622735977&right=-8.3930967003107071&top=51.88590865860202&bottom=51.877431503513762
+	curl -k -v -X GET -H "Content-Type: application/json" "http://localhost:50027/v1/buses/?left=-8.4008214622735977&right=-8.3930967003107071&top=51.88590865860202&bottom=51.877431503513762" | python -m json.tool
+	curl -k -v -X GET -H "Content-Type: application/json" "http://localhost:50027/v1/stops/?left=-8.4008214622735977&right=-8.3930967003107071&top=51.88590865860202&bottom=51.877431503513762" | python -m json.tool
+	curl -k -v -X GET -H "Content-Type: application/json" "http://localhost:50027/v1/stops/6350786630982516945" | python -m json.tool
 
    Request URL: http://www.buseireann.ie/inc/proto/stopPointTdi.php?latitude_north=186822972&latitude_south=186750972&longitude_east=-30202812&longitude_west=-30274812&_=1441998764206
    
